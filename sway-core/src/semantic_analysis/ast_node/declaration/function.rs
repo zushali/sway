@@ -135,6 +135,8 @@ impl ty::TyFunctionDecl {
             (visibility, matches!(ctx.abi_mode(), AbiMode::ImplAbiFn(..)))
         };
 
+        // TODO: check that arguments to a contract call or entry point have a size known at compile time for safety once we have a Sized trait
+
         return_type.type_id.check_type_parameter_bounds(
             handler,
             &ctx,
@@ -228,10 +230,7 @@ fn test_function_selector_behavior() {
                 is_reference: false,
                 is_mutable: false,
                 mutability_span: Span::dummy(),
-                type_argument: engines
-                    .te()
-                    .insert(&engines, TypeInfo::Str(Length::new(5, Span::dummy())))
-                    .into(),
+                type_argument: engines.te().insert(&engines, TypeInfo::Str).into(),
             },
             ty::TyFunctionParameter {
                 name: Ident::new_no_span("baz".into()),
@@ -242,9 +241,7 @@ fn test_function_selector_behavior() {
                     type_id: engines
                         .te()
                         .insert(&engines, TypeInfo::UnsignedInteger(IntegerBits::ThirtyTwo)),
-                    initial_type_id: engines
-                        .te()
-                        .insert(&engines, TypeInfo::Str(Length::new(5, Span::dummy()))),
+                    initial_type_id: engines.te().insert(&engines, TypeInfo::Str),
                     span: Span::dummy(),
                     call_path_tree: None,
                 },
@@ -263,5 +260,5 @@ fn test_function_selector_behavior() {
         .to_selector_name(&handler, &engines)
         .expect("test failure");
 
-    assert_eq!(selector_text, "bar(str[5],u32)".to_string());
+    assert_eq!(selector_text, "bar(str,u32)".to_string());
 }

@@ -980,7 +980,7 @@ impl Constant {
                     .collect::<Vec<String>>()
                     .concat()
             ),
-            ConstantValue::String(bs) => format!(
+            ConstantValue::StringData(bs) => format!(
                 "{} \"{}\"",
                 self.ty.as_string(context),
                 bs.iter()

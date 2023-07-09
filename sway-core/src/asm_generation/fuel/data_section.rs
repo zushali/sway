@@ -108,7 +108,7 @@ impl Entry {
                 Entry::new_byte_array(bytes.to_vec(), size, name)
             }
             ConstantValue::B256(bs) => Entry::new_byte_array(bs.to_vec(), size, name),
-            ConstantValue::String(bs) => Entry::new_byte_array(bs.clone(), size, name),
+            ConstantValue::StringData(bs) => Entry::new_byte_array(bs.clone(), size, name),
 
             ConstantValue::Array(els) | ConstantValue::Struct(els) => Entry::new_collection(
                 els.iter()

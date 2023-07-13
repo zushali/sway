@@ -11,6 +11,7 @@ use super::{module::Module, root::Root, submodule_namespace::SubmoduleNamespace,
 
 use sway_error::error::CompileError;
 use sway_types::{span::Span, Spanned};
+use sway_types::integer_bits::IntegerBits;
 
 use std::collections::{HashMap, VecDeque};
 
@@ -169,6 +170,20 @@ impl Namespace {
         let type_engine = engines.te();
         let _decl_engine = engines.de();
 
+
+        // If we're looking for a numeric type, default to u64
+        if let TypeInfo::Numeric = type_engine.get(type_id) {
+            let tid_u64 = engines.te().insert(engines, TypeInfo::UnsignedInteger(IntegerBits::SixtyFour));
+            check!(
+                CompileResult::from(
+                    engines.te().unify(&engines, type_id, tid_u64, &item_name.span(), "", None)
+                ),
+                return err(warnings, errors),
+                warnings,
+                errors
+            );
+        }
+
         // If the type that we are looking for is the error recovery type, then
         // we want to return the error case without creating a new error
         // message.
@@ -263,6 +278,7 @@ impl Namespace {
 
         let decl_engine = engines.de();
         let type_engine = engines.te();
+
 
         let unify_check = UnifyCheck::non_dynamic_equality(engines);
 

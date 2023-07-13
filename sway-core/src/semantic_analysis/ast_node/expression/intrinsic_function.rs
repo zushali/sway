@@ -113,26 +113,21 @@ fn type_check_not(
         errors
     );
 
-    let operand_typeinfo = check!(
-        CompileResult::from(
-            type_engine
-                .to_typeinfo(operand_expr.return_type, &operand_expr.span)
-                .map_err(CompileError::from)
-        ),
-        TypeInfo::ErrorRecovery,
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            operand_expr.return_type,
+            engines.te().insert(&engines, TypeInfo::Numeric),
+            &operand_expr.span,
+            "",
+            None,
+        )),
+        (),
         warnings,
-        errors
+        errors,
     );
-    let is_valid_arg_ty = matches!(operand_typeinfo, TypeInfo::UnsignedInteger(_));
-    if !is_valid_arg_ty {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: operand_expr.span,
-            hint: Hint::empty(),
-        });
-        return err(warnings, errors);
-    }
 
+    let return_type = operand_expr.return_type;
     ok(
         (
             ty::TyIntrinsicFunctionKind {
@@ -141,7 +136,7 @@ fn type_check_not(
                 type_arguments: vec![],
                 span,
             },
-            type_engine.insert(engines, operand_typeinfo),
+            return_type,
         ),
         warnings,
         errors,
@@ -362,6 +357,27 @@ fn type_check_cmp(
         warnings,
         errors
     );
+    let rhs = arguments[1].clone();
+    let rhs = check!(
+        ty::TyExpression::type_check(ctx, rhs),
+        return err(warnings, errors),
+        warnings,
+        errors
+    );
+
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            lhs.return_type,
+            rhs.return_type,
+            &lhs.span,
+            "",
+            None,
+        )),
+        (),
+        warnings,
+        errors,
+    );
 
     // Check for supported argument types
     let arg_ty = check!(
@@ -374,7 +390,7 @@ fn type_check_cmp(
         warnings,
         errors
     );
-    let is_valid_arg_ty = matches!(arg_ty, TypeInfo::UnsignedInteger(_))
+    let is_valid_arg_ty = matches!(arg_ty, TypeInfo::UnsignedInteger(_) | TypeInfo::Numeric)
         || (matches!(&kind, Intrinsic::Eq)
             && matches!(arg_ty, TypeInfo::Boolean | TypeInfo::RawUntypedPtr));
     if !is_valid_arg_ty {
@@ -386,17 +402,6 @@ fn type_check_cmp(
         return err(warnings, errors);
     }
 
-    let rhs = arguments[1].clone();
-    let ctx = ctx
-        .by_ref()
-        .with_help_text("Incorrect argument type")
-        .with_type_annotation(lhs.return_type);
-    let rhs = check!(
-        ty::TyExpression::type_check(ctx, rhs),
-        return err(warnings, errors),
-        warnings,
-        errors
-    );
     ok(
         (
             ty::TyIntrinsicFunctionKind {
@@ -472,48 +477,42 @@ fn type_check_gtf(
     );
 
     // Make sure that the index argument is a `u64`
-    let index_type_info = check!(
+    check!(
         CompileResult::from(
-            type_engine
-                .to_typeinfo(index.return_type, &index.span)
-                .map_err(CompileError::from)
+            type_engine.unify(
+                engines,
+                index.return_type,
+                engines
+                    .te()
+                    .insert(&engines, TypeInfo::UnsignedInteger(IntegerBits::SixtyFour)),
+                &index.span,
+                "",
+                None,
+            )
         ),
-        TypeInfo::ErrorRecovery,
+        (),
         warnings,
-        errors
+        errors,
     );
-    if !matches!(
-        index_type_info,
-        TypeInfo::UnsignedInteger(IntegerBits::SixtyFour)
-    ) {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: index.span.clone(),
-            hint: Hint::empty(),
-        });
-    }
 
     // Make sure that the tx field ID is a `u64`
-    let tx_field_type_info = check!(
+    check!(
         CompileResult::from(
-            type_engine
-                .to_typeinfo(tx_field_id.return_type, &tx_field_id.span)
-                .map_err(CompileError::from)
+            type_engine.unify(
+                engines,
+                tx_field_id.return_type,
+                engines
+                    .te()
+                    .insert(&engines, TypeInfo::UnsignedInteger(IntegerBits::SixtyFour)),
+                &tx_field_id.span,
+                "",
+                None,
+            )
         ),
-        TypeInfo::ErrorRecovery,
+        (),
         warnings,
-        errors
+        errors,
     );
-    if !matches!(
-        tx_field_type_info,
-        TypeInfo::UnsignedInteger(IntegerBits::SixtyFour)
-    ) {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: tx_field_id.span.clone(),
-            hint: Hint::empty(),
-        });
-    }
 
     let targ = type_arguments[0].clone();
     let initial_type_info = check!(
@@ -1095,39 +1094,56 @@ fn type_check_binary_op(
         warnings,
         errors
     );
-
-    // Check for supported argument types
-    let arg_ty = check!(
-        CompileResult::from(
-            type_engine
-                .to_typeinfo(lhs.return_type, &lhs.span)
-                .map_err(CompileError::from)
-        ),
-        TypeInfo::ErrorRecovery,
-        warnings,
-        errors
-    );
-    let is_valid_arg_ty = matches!(arg_ty, TypeInfo::UnsignedInteger(_));
-    if !is_valid_arg_ty {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: lhs.span,
-            hint: Hint::empty(),
-        });
-        return err(warnings, errors);
-    }
-
     let rhs = arguments[1].clone();
-    let ctx = ctx
-        .by_ref()
-        .with_help_text("Incorrect argument type")
-        .with_type_annotation(lhs.return_type);
     let rhs = check!(
         ty::TyExpression::type_check(ctx, rhs),
         return err(warnings, errors),
         warnings,
         errors
     );
+
+    // Check for supported argument types
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            lhs.return_type,
+            engines.te().insert(&engines, TypeInfo::Numeric),
+            &lhs.span,
+            "",
+            None,
+        )),
+        (),
+        warnings,
+        errors,
+    );
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            rhs.return_type,
+            engines.te().insert(&engines, TypeInfo::Numeric),
+            &rhs.span,
+            "",
+            None,
+        )),
+        (),
+        warnings,
+        errors,
+    );
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            lhs.return_type,
+            rhs.return_type,
+            &lhs.span,
+            "",
+            None,
+        )),
+        (),
+        warnings,
+        errors,
+    );
+
+    let return_type = lhs.return_type;
     ok(
         (
             ty::TyIntrinsicFunctionKind {
@@ -1136,7 +1152,7 @@ fn type_check_binary_op(
                 type_arguments: vec![],
                 span,
             },
-            type_engine.insert(engines, arg_ty),
+            return_type,
         ),
         warnings,
         errors,
@@ -1186,66 +1202,53 @@ fn type_check_shift_binary_op(
 
     let lhs = arguments[0].clone();
     let lhs = check!(
-        ty::TyExpression::type_check(ctx.by_ref(), lhs),
+        ty::TyExpression::type_check(
+            ctx.by_ref()
+                .with_help_text("Incorrect argument type")
+                .with_type_annotation(engines.te().insert(&engines, TypeInfo::Numeric)),
+            lhs
+        ),
         return err(warnings, errors),
         warnings,
         errors
     );
-
-    // Check for supported argument types
-    let arg_ty = check!(
-        CompileResult::from(
-            type_engine
-                .to_typeinfo(lhs.return_type, &lhs.span)
-                .map_err(CompileError::from)
-        ),
-        TypeInfo::ErrorRecovery,
-        warnings,
-        errors
-    );
-    let is_valid_arg_ty = matches!(arg_ty, TypeInfo::UnsignedInteger(_));
-    if !is_valid_arg_ty {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: lhs.span,
-            hint: Hint::empty(),
-        });
-        return err(warnings, errors);
-    }
-
-    let ctx = ctx
-        .by_ref()
-        .with_type_annotation(type_engine.insert(engines, TypeInfo::Unknown));
-
     let rhs = arguments[1].clone();
     let rhs = check!(
-        ty::TyExpression::type_check(ctx, rhs),
+        ty::TyExpression::type_check(ctx.by_ref(), rhs),
         return err(warnings, errors),
         warnings,
         errors
     );
 
     // Check for supported argument types
-    let rhs_ty = check!(
-        CompileResult::from(
-            type_engine
-                .to_typeinfo(rhs.return_type, &rhs.span)
-                .map_err(CompileError::from)
-        ),
-        TypeInfo::ErrorRecovery,
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            lhs.return_type,
+            engines.te().insert(&engines, TypeInfo::Numeric),
+            &lhs.span,
+            "",
+            None,
+        )),
+        (),
         warnings,
-        errors
+        errors,
     );
-    let is_valid_rhs_ty = matches!(rhs_ty, TypeInfo::UnsignedInteger(_));
-    if !is_valid_rhs_ty {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: lhs.span,
-            hint: Hint::empty(),
-        });
-        return err(warnings, errors);
-    }
+    check!(
+        CompileResult::from(type_engine.unify(
+            engines,
+            rhs.return_type,
+            engines.te().insert(&engines, TypeInfo::Numeric),
+            &rhs.span,
+            "",
+            None,
+        )),
+        (),
+        warnings,
+        errors,
+    );
 
+    let return_type = lhs.return_type.clone();
     ok(
         (
             ty::TyIntrinsicFunctionKind {
@@ -1254,7 +1257,7 @@ fn type_check_shift_binary_op(
                 type_arguments: vec![],
                 span,
             },
-            type_engine.insert(engines, arg_ty),
+            return_type,
         ),
         warnings,
         errors,
@@ -1307,18 +1310,23 @@ fn type_check_revert(
     );
 
     // Make sure that the revert code is a `u64`
-    if !matches!(
-        type_engine
-            .to_typeinfo(revert_code.return_type, &revert_code.span)
-            .unwrap(),
-        TypeInfo::UnsignedInteger(IntegerBits::SixtyFour)
-    ) {
-        errors.push(CompileError::IntrinsicUnsupportedArgType {
-            name: kind.to_string(),
-            span: revert_code.span.clone(),
-            hint: Hint::empty(),
-        });
-    }
+    check!(
+        CompileResult::from(
+            type_engine.unify(
+                engines,
+                revert_code.return_type,
+                engines
+                    .te()
+                    .insert(&engines, TypeInfo::UnsignedInteger(IntegerBits::SixtyFour)),
+                &revert_code.span,
+                "",
+                None,
+            )
+        ),
+        (),
+        warnings,
+        errors,
+    );
 
     ok(
         (

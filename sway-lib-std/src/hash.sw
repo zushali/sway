@@ -5,13 +5,24 @@ library;
 pub fn sha256<T>(param: T) -> b256 {
     let mut result_buffer: b256 = b256::min();
     if !__is_reference_type::<T>() {
-        asm(buffer, ptr: param, eight_bytes: 8, hash: result_buffer) {
-            move buffer sp; // Make `buffer` point to the current top of the stack
-            cfei i8; // Grow stack by 1 word
-            sw buffer ptr i0; // Save value in register at "ptr" to memory at "buffer"
-            s256 hash buffer eight_bytes; // Hash the next eight bytes starting from "buffer" into "hash"
-            cfsi i8; // Shrink stack by 1 word
-            hash: b256 // Return
+        if __eq(__size_of::<T>(), 1) {
+            asm(buffer, ptr: param, one_byte: 1, hash: result_buffer) {
+                move buffer sp; // Make `buffer` point to the current top of the stack
+                cfei i8; // Grow stack by 1 word
+                sb buffer ptr i0; // Save value in register at "ptr" to memory at "buffer"
+                s256 hash buffer one_byte; // Hash the next byte starting from "buffer" into "hash"
+                cfsi i8; // Shrink stack by 1 word
+                hash: b256 // Return
+            }
+        } else {
+            asm(buffer, ptr: param, eight_bytes: 8, hash: result_buffer) {
+                move buffer sp; // Make `buffer` point to the current top of the stack
+                cfei i8; // Grow stack by 1 word
+                sw buffer ptr i0; // Save value in register at "ptr" to memory at "buffer"
+                s256 hash buffer eight_bytes; // Hash the next eight bytes starting from "buffer" into "hash"
+                cfsi i8; // Shrink stack by 1 word
+                hash: b256 // Return
+            }
         }
     } else {
         let size = if __is_str_type::<T>() {
@@ -30,13 +41,24 @@ pub fn sha256<T>(param: T) -> b256 {
 pub fn keccak256<T>(param: T) -> b256 {
     let mut result_buffer: b256 = b256::min();
     if !__is_reference_type::<T>() {
-        asm(buffer, ptr: param, eight_bytes: 8, hash: result_buffer) {
-            move buffer sp; // Make `buffer` point to the current top of the stack
-            cfei i8; // Grow stack by 1 word
-            sw buffer ptr i0; // Save value in register at "ptr" to memory at "buffer"
-            k256 hash buffer eight_bytes; // Hash the next eight bytes starting from "buffer" into "hash"
-            cfsi i8; // Shrink stack by 1 word
-            hash: b256 // Return
+        if __eq(__size_of::<T>(), 1) {
+            asm(buffer, ptr: param, one_byte: 1, hash: result_buffer) {
+                move buffer sp; // Make `buffer` point to the current top of the stack
+                cfei i8; // Grow stack by 1 word
+                sb buffer ptr i0; // Save value in register at "ptr" to memory at "buffer"
+                k256 hash buffer one_byte; // Hash the next byte starting from "buffer" into "hash"
+                cfsi i8; // Shrink stack by 1 word
+                hash: b256 // Return
+            }
+        } else {
+            asm(buffer, ptr: param, eight_bytes: 8, hash: result_buffer) {
+                move buffer sp; // Make `buffer` point to the current top of the stack
+                cfei i8; // Grow stack by 1 word
+                sw buffer ptr i0; // Save value in register at "ptr" to memory at "buffer"
+                k256 hash buffer eight_bytes; // Hash the next eight bytes starting from "buffer" into "hash"
+                cfsi i8; // Shrink stack by 1 word
+                hash: b256 // Return
+            }
         }
     } else {
         let size = if __is_str_type::<T>() {

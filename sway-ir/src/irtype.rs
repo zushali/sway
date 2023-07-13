@@ -50,7 +50,6 @@ impl Type {
         Self::get_or_create_unique_type(context, TypeContent::Unit);
         Self::get_or_create_unique_type(context, TypeContent::Bool);
         Self::get_or_create_unique_type(context, TypeContent::Uint(8));
-        Self::get_or_create_unique_type(context, TypeContent::Uint(32));
         Self::get_or_create_unique_type(context, TypeContent::Uint(64));
         Self::get_or_create_unique_type(context, TypeContent::B256);
         Self::get_or_create_unique_type(context, TypeContent::Slice);
@@ -79,11 +78,6 @@ impl Type {
     /// New u8 type
     pub fn get_uint8(context: &Context) -> Type {
         Self::get_type(context, &TypeContent::Uint(8)).expect("create_basic_types not called")
-    }
-
-    /// New u32 type
-    pub fn get_uint32(context: &Context) -> Type {
-        Self::get_type(context, &TypeContent::Uint(32)).expect("create_basic_types not called")
     }
 
     /// New u64 type
@@ -385,26 +379,37 @@ impl Type {
 
     pub fn size_in_bytes(&self, context: &Context) -> u64 {
         match self.get_content(context) {
-            TypeContent::Unit
-            | TypeContent::Bool
-            | TypeContent::Uint(_)
+            TypeContent::Uint(8) | TypeContent::Bool | TypeContent::Unit => 1,
+            // All integers larger than a byte are words since FuelVM only has memory operations on those two units
+            TypeContent::Uint(16)
+            | TypeContent::Uint(32)
+            | TypeContent::Uint(64)
             | TypeContent::Pointer(_) => 8,
+            TypeContent::Uint(_) => unreachable!(),
             TypeContent::Slice => 16,
             TypeContent::B256 => 32,
             TypeContent::String(n) => super::size_bytes_round_up_to_word_alignment!(*n),
             TypeContent::Array(el_ty, cnt) => cnt * el_ty.size_in_bytes(context),
             TypeContent::Struct(field_tys) => {
-                // Sum up all the field sizes.
+                // Sum up all the field sizes, aligned to 8 bytes.
                 field_tys
                     .iter()
-                    .map(|field_ty| field_ty.size_in_bytes(context))
+                    .map(|field_ty| {
+                        super::size_bytes_round_up_to_word_alignment!(
+                            field_ty.size_in_bytes(context)
+                        )
+                    })
                     .sum()
             }
             TypeContent::Union(field_tys) => {
                 // Find the max size for field sizes.
                 field_tys
                     .iter()
-                    .map(|field_ty| field_ty.size_in_bytes(context))
+                    .map(|field_ty| {
+                        super::size_bytes_round_up_to_word_alignment!(
+                            field_ty.size_in_bytes(context)
+                        )
+                    })
                     .max()
                     .unwrap_or(0)
             }

@@ -2,19 +2,53 @@ category = "fail"
 
 # check: $()error
 # check: $()__add(A { a: 32 }, 32);
-# nextln: $()Unsupported argument type to intrinsic "add"
+# nextln: $()Mismatched types
+# nextln: $()expected: A
+# nextln: $()found:    numeric.
+# nextln: $()help: Variable declaration's type annotation does not match up with the assigned expression's type.
+
+# check: $()error
+# check: $()__add(A { a: 32 }, 32);
+# nextln: $()Mismatched types
+# nextln: $()expected: numeric
+# nextln: $()found:    A.
 
 # check: $()error
 # check: $()__add("Hello", 22);
-# nextln: $()Unsupported argument type to intrinsic "add"
+# nextln: $()Mismatched types
+# nextln: $()expected: str[5]
+# nextln: $()found:    numeric.
+# nextln: $()help: Variable declaration's type annotation does not match up with the assigned expression's type.
+
+# check: $()error
+# check: $()__add("Hello", 22);
+# nextln: $()Mismatched types
+# nextln: $()expected: numeric
+# nextln: $()found:    str[5].
 
 # check: $()error
 # check: $()__add("Hello", "Hello")
-# nextln: $()Unsupported argument type to intrinsic "add"
+# nextln: $()Mismatched types
+# nextln: $()expected: numeric
+# nextln: $()found:    str[5].
+
+# check: $()error
+# check: $()__add("Hello", "Hello")
+# nextln: $()Mismatched types
+# nextln: $()expected: numeric
+# nextln: $()found:    str[5].
 
 # check: $()error
 # check: $()__add(false, true)
-# nextln: $()Unsupported argument type to intrinsic "add"
+# nextln: $()Mismatched types
+# nextln: $()expected: numeric
+# nextln: $()found:    bool.
+
+# check: $()error
+# check: $()__add(false, true)
+# nextln: $()Mismatched types
+# nextln: $()expected: numeric
+# nextln: $()found:    bool.
 
 # check: $()error
 # check: $()__add::<u32>(0, 1)

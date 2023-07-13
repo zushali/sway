@@ -632,6 +632,7 @@ impl<'ir, 'eng> FuelAsmBuilder<'ir, 'eng> {
                     self.ptr_map.insert(*ptr, Storage::Stack(stack_base));
 
                     let ptr_ty = ptr.get_inner_type(self.context);
+                    let var_byte_size = ir_type_size_in_bytes(self.context, &ptr_ty);
                     let var_size = match ptr_ty.get_content(self.context) {
                         TypeContent::Unit
                         | TypeContent::Bool
@@ -652,7 +653,7 @@ impl<'ir, 'eng> FuelAsmBuilder<'ir, 'eng> {
                             None,
                         ));
 
-                        init_mut_vars.push((stack_base, var_size, data_id));
+                        init_mut_vars.push((stack_base, var_size, var_byte_size, data_id));
                     }
 
                     (stack_base + var_size, init_mut_vars)
@@ -683,7 +684,7 @@ impl<'ir, 'eng> FuelAsmBuilder<'ir, 'eng> {
         });
 
         // Initialise that stack variables which require it.
-        for (var_stack_offs, var_word_size, var_data_id) in init_mut_vars {
+        for (var_stack_offs, var_word_size, var_byte_size, var_data_id) in init_mut_vars {
             // Load our initialiser from the data section.
             self.cur_bytecode.push(Op {
                 opcode: Either::Left(VirtualOp::LWDataId(
@@ -737,15 +738,27 @@ impl<'ir, 'eng> FuelAsmBuilder<'ir, 'eng> {
 
             if var_word_size == 1 {
                 // Initialise by value.
-                self.cur_bytecode.push(Op {
-                    opcode: Either::Left(VirtualOp::SW(
-                        dst_reg,
-                        VirtualRegister::Constant(ConstantRegister::Scratch),
-                        VirtualImmediate12 { value: 0 },
-                    )),
-                    comment: "store initializer to local variable".to_owned(),
-                    owning_span: None,
-                });
+                if var_byte_size == 1 {
+                    self.cur_bytecode.push(Op {
+                        opcode: Either::Left(VirtualOp::SB(
+                            dst_reg,
+                            VirtualRegister::Constant(ConstantRegister::Scratch),
+                            VirtualImmediate12 { value: 0 },
+                        )),
+                        comment: "store initializer to local variable".to_owned(),
+                        owning_span: None,
+                    });
+                } else {
+                    self.cur_bytecode.push(Op {
+                        opcode: Either::Left(VirtualOp::SW(
+                            dst_reg,
+                            VirtualRegister::Constant(ConstantRegister::Scratch),
+                            VirtualImmediate12 { value: 0 },
+                        )),
+                        comment: "store initializer to local variable".to_owned(),
+                        owning_span: None,
+                    });
+                }
             } else {
                 // Initialise by reference.
                 let var_byte_size = var_word_size * 8;

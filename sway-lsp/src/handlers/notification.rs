@@ -21,7 +21,7 @@ pub(crate) async fn handle_did_open_text_document_async(
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.handle_open_file(&uri);
     state
-        .parse_project_async(uri, params.text_document.uri, session.clone())
+        .parse_project(uri, params.text_document.uri, session.clone())
         .await;
     Ok(())
 }
@@ -35,7 +35,7 @@ pub(crate) async fn handle_did_change_text_document_async(
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.write_changes_to_file(&uri, params.content_changes)?;
     state
-        .parse_project_async(uri, params.text_document.uri, session.clone())
+        .parse_project(uri, params.text_document.uri, session.clone())
         .await;
     Ok(())
 }
@@ -49,7 +49,7 @@ pub(crate) async fn handle_did_save_text_document_async(
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.sync.resync()?;
     state
-        .parse_project_async(uri, params.text_document.uri, session.clone())
+        .parse_project(uri, params.text_document.uri, session.clone())
         .await;
     Ok(())
 }
@@ -74,7 +74,7 @@ pub(crate) fn handle_did_change_watched_files(
 
 #[cfg(feature = "custom-event-loop")]
 pub(crate) fn handle_did_open_text_document(
-    ext: &ServerStateExt,
+    ext: &mut ServerStateExt,
     params: DidOpenTextDocumentParams,
 ) -> Result<(), LanguageServerError> {
     let (uri, session) = ext
@@ -82,18 +82,18 @@ pub(crate) fn handle_did_open_text_document(
         .sessions
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.handle_open_file(&uri);
-    ext.state
-        .parse_project(uri, params.text_document.uri, session.clone());
-    ext.publish_diagnostics(
-        params.text_document.uri,
-        ext.state.diagnostics(&uri, session),
-    );
+    if session.parse_project(&uri)? {
+        ext.publish_diagnostics(
+            params.text_document.uri,
+            ext.state.diagnostics(&uri, session),
+        );
+    }
     Ok(())
 }
 
 #[cfg(feature = "custom-event-loop")]
 pub(crate) fn handle_did_change_text_document(
-    ext: &ServerStateExt,
+    ext: &mut ServerStateExt,
     params: DidChangeTextDocumentParams,
 ) -> Result<(), LanguageServerError> {
     let (uri, session) = ext
@@ -101,18 +101,18 @@ pub(crate) fn handle_did_change_text_document(
         .sessions
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.write_changes_to_file(&uri, params.content_changes)?;
-    ext.state
-        .parse_project(uri, params.text_document.uri, session.clone());
-    ext.publish_diagnostics(
-        params.text_document.uri,
-        ext.state.diagnostics(&uri, session),
-    );
+    if session.parse_project(&uri)? {
+        ext.publish_diagnostics(
+            params.text_document.uri,
+            ext.state.diagnostics(&uri, session),
+        );
+    }
     Ok(())
 }
 
 #[cfg(feature = "custom-event-loop")]
 pub(crate) fn handle_did_save_text_document(
-    ext: &ServerStateExt,
+    ext: &mut ServerStateExt,
     params: DidSaveTextDocumentParams,
 ) -> Result<(), LanguageServerError> {
     let (uri, session) = ext
@@ -120,12 +120,12 @@ pub(crate) fn handle_did_save_text_document(
         .sessions
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.sync.resync()?;
-    ext.state
-        .parse_project(uri, params.text_document.uri, session.clone());
-    ext.publish_diagnostics(
-        params.text_document.uri,
-        ext.state.diagnostics(&uri, session),
-    );
+    if session.parse_project(&uri)? {
+        ext.publish_diagnostics(
+            params.text_document.uri,
+            ext.state.diagnostics(&uri, session),
+        );
+    }
     Ok(())
 }
 

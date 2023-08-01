@@ -17,22 +17,28 @@ use tower_lsp::{jsonrpc, Client};
 
 /// `ServerState` is the primary mutable state of the language server
 pub struct ServerState {
-    pub(crate) client: Client,
+    pub(crate) client: Option<Client>,
     pub(crate) config: Arc<RwLock<Config>>,
     pub(crate) keyword_docs: Arc<KeywordDocs>,
     pub(crate) sessions: Arc<Sessions>,
 }
 
+impl Default for ServerState {
+    fn default() -> Self {
+        ServerState {
+            client: None,
+            config: Arc::new(RwLock::new(Default::default())),
+            keyword_docs: Arc::new(KeywordDocs::new()),
+            sessions: Arc::new(Sessions(DashMap::new())),
+        }
+    }
+}
+
 impl ServerState {
     pub fn new(client: Client) -> ServerState {
-        let sessions = Arc::new(Sessions(DashMap::new()));
-        let config = Arc::new(RwLock::new(Default::default()));
-        let keyword_docs = Arc::new(KeywordDocs::new());
         ServerState {
-            client,
-            config,
-            keyword_docs,
-            sessions,
+            client: Some(client),
+            ..Default::default()
         }
     }
 
@@ -74,37 +80,17 @@ impl ServerState {
         diagnostics_to_publish
     }
 
-    pub(crate) async fn parse_project_async(
-        &self,
-        uri: Url,
-        workspace_uri: Url,
-        session: Arc<Session>,
-    ) {
+    pub(crate) async fn parse_project(&self, uri: Url, workspace_uri: Url, session: Arc<Session>) {
         let should_publish = run_blocking_parse_project(uri.clone(), session.clone()).await;
         if should_publish {
             // Note: Even if the computed diagnostics vec is empty, we still have to push the empty Vec
             // in order to clear former diagnostics. Newly pushed diagnostics always replace previously pushed diagnostics.
             self.client
+                .as_ref()
+                .unwrap()
                 .publish_diagnostics(workspace_uri.clone(), self.diagnostics(&uri, session), None)
                 .await;
         }
-    }
-
-    pub(crate) fn parse_project(
-        &self,
-        uri: Url,
-        workspace_uri: Url,
-        session: Arc<Session>,
-    ) -> Result<(), LanguageServerError> {
-        let should_publish = session.parse_project(&uri)?;
-        if should_publish {
-            // Note: Even if the computed diagnostics vec is empty, we still have to push the empty Vec
-            // in order to clear former diagnostics. Newly pushed diagnostics always replace previously pushed diagnostics.
-            self.client
-                .publish_diagnostics(workspace_uri.clone(), self.diagnostics(&uri, session), None)
-                .await;
-        }
-        Ok(())
     }
 }
 

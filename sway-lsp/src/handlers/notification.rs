@@ -1,13 +1,18 @@
 //! This module is responsible for implementing handlers for Language Server
 //! Protocol. This module specifically handles notification messages sent by the Client.
 
-use crate::{error::LanguageServerError, server_state::ServerState};
+use crate::{
+    error::LanguageServerError, event_loop::server_state_ext::ServerStateExt,
+    server_state::ServerState,
+};
 use lsp_types::{
     DidChangeTextDocumentParams, DidChangeWatchedFilesParams, DidOpenTextDocumentParams,
     DidSaveTextDocumentParams, FileChangeType,
 };
 
-pub(crate) async fn handle_did_open_text_document(
+//--------------- Async versions --------------//
+
+pub(crate) async fn handle_did_open_text_document_async(
     state: &ServerState,
     params: DidOpenTextDocumentParams,
 ) -> Result<(), LanguageServerError> {
@@ -16,12 +21,12 @@ pub(crate) async fn handle_did_open_text_document(
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.handle_open_file(&uri);
     state
-        .parse_project(uri, params.text_document.uri, session.clone())
+        .parse_project_async(uri, params.text_document.uri, session.clone())
         .await;
     Ok(())
 }
 
-pub(crate) async fn handle_did_change_text_document(
+pub(crate) async fn handle_did_change_text_document_async(
     state: &ServerState,
     params: DidChangeTextDocumentParams,
 ) -> Result<(), LanguageServerError> {
@@ -30,12 +35,12 @@ pub(crate) async fn handle_did_change_text_document(
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.write_changes_to_file(&uri, params.content_changes)?;
     state
-        .parse_project(uri, params.text_document.uri, session.clone())
+        .parse_project_async(uri, params.text_document.uri, session.clone())
         .await;
     Ok(())
 }
 
-pub(crate) async fn handle_did_save_text_document(
+pub(crate) async fn handle_did_save_text_document_async(
     state: &ServerState,
     params: DidSaveTextDocumentParams,
 ) -> Result<(), LanguageServerError> {
@@ -44,7 +49,7 @@ pub(crate) async fn handle_did_save_text_document(
         .uri_and_session_from_workspace(&params.text_document.uri)?;
     session.sync.resync()?;
     state
-        .parse_project(uri, params.text_document.uri, session.clone())
+        .parse_project_async(uri, params.text_document.uri, session.clone())
         .await;
     Ok(())
 }
@@ -65,9 +70,54 @@ pub(crate) fn handle_did_change_watched_files(
     }
 }
 
+//--------------- Sync versions --------------//
+
+#[cfg(feature = "custom-event-loop")]
+pub(crate) fn handle_did_open_text_document(
+    ext: &ServerStateExt,
+    params: DidOpenTextDocumentParams,
+) -> Result<(), LanguageServerError> {
+    let (uri, session) = ext
+        .state
+        .sessions
+        .uri_and_session_from_workspace(&params.text_document.uri)?;
+    session.handle_open_file(&uri);
+    ext.state.parse_project(uri, params.text_document.uri, session.clone());
+    ext.publish_diagnostics(params.text_document.uri, ext.state.diagnostics(&uri, session));
+    Ok(())
+}
+
+#[cfg(feature = "custom-event-loop")]
+pub(crate) fn handle_did_change_text_document(
+    ext: &ServerStateExt,
+    params: DidChangeTextDocumentParams,
+) -> Result<(), LanguageServerError> {
+    let (uri, session) = ext.state
+        .sessions
+        .uri_and_session_from_workspace(&params.text_document.uri)?;
+    session.write_changes_to_file(&uri, params.content_changes)?;
+    ext.state.parse_project(uri, params.text_document.uri, session.clone());
+    ext.publish_diagnostics(params.text_document.uri, ext.state.diagnostics(&uri, session));
+    Ok(())
+}
+
+#[cfg(feature = "custom-event-loop")]
+pub(crate) fn handle_did_save_text_document(
+    ext: &ServerStateExt,
+    params: DidSaveTextDocumentParams,
+) -> Result<(), LanguageServerError> {
+    let (uri, session) = ext.state
+        .sessions
+        .uri_and_session_from_workspace(&params.text_document.uri)?;
+    session.sync.resync()?;
+    ext.state.parse_project(uri, params.text_document.uri, session.clone());
+    ext.publish_diagnostics(params.text_document.uri, ext.state.diagnostics(&uri, session));
+    Ok(())
+}
+
 #[cfg(feature = "custom-event-loop")]
 pub(crate) fn handle_cancel(
-    state: &mut crate::event_loop::server_state_ext::ServerStateExt,
+    state: &mut ServerStateExt,
     params: lsp_types::CancelParams,
 ) {
     let id: lsp_server::RequestId = match params.id {

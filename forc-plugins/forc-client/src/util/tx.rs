@@ -15,7 +15,7 @@ use fuels_core::types::{
     transaction_builders::{create_coin_input, create_coin_message_input},
 };
 
-use forc_wallet::{account::derive_secret_key, new::new_wallet_cli, utils::default_wallet_path};
+use forc_wallet::{account::{derive_secret_key, new_at_index_cli}, new::new_wallet_cli, utils::default_wallet_path};
 
 /// The maximum time to wait for a transaction to be included in a block by the node
 pub const TX_SUBMIT_TIMEOUT_MS: u64 = 30_000u64;
@@ -156,7 +156,9 @@ impl<Tx: Buildable + SerializableVec + field::Witnesses + Send> TransactionBuild
                         let accepted = ask_user_yes_no_question(&question)?;
                         if accepted {
                             new_wallet_cli(&wallet_path)?;
-                            println!("Wallet created successfully.")
+                            println!("Wallet created successfully. Deriving first account");
+                            // Derive first account for the fresh wallet we created.
+                            new_at_index_cli(&wallet_path, 0)?;
                         } else {
                             anyhow::bail!("Refused to create a new wallet. If you don't want to use forc-wallet, you can sign this transaction manually with --manual-signing flag.")
                         }

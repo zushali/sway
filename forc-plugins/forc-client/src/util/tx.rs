@@ -15,7 +15,11 @@ use fuels_core::types::{
     transaction_builders::{create_coin_input, create_coin_message_input},
 };
 
-use forc_wallet::{account::{derive_secret_key, new_at_index_cli}, new::new_wallet_cli, utils::default_wallet_path};
+use forc_wallet::{
+    account::{derive_secret_key, new_at_index_cli},
+    new::new_wallet_cli,
+    utils::default_wallet_path,
+};
 
 /// The maximum time to wait for a transaction to be included in a block by the node
 pub const TX_SUBMIT_TIMEOUT_MS: u64 = 30_000u64;

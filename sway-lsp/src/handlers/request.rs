@@ -419,6 +419,7 @@ pub(crate) fn handle_on_enter(
     state: &ServerState,
     params: lsp_ext::OnEnterParams,
 ) -> Result<Option<WorkspaceEdit>> {
+    eprintln!("Handle on enter begin");
     let config = state.config.read().on_enter.clone();
     match state
         .sessions
@@ -435,10 +436,14 @@ pub(crate) fn handle_on_enter(
     }
 }
 
+//------------- SNAPSHOTS -------------
+use crate::event_loop::server_state_ext::ServerStateSnapshot;
+
 pub(crate) fn handle_on_enter_snap(
-    state: crate::event_loop::server_state_ext::ServerStateSnapshot,
+    state: ServerStateSnapshot,
     params: lsp_ext::OnEnterParams,
 ) -> anyhow::Result<Option<WorkspaceEdit>> {
+    eprintln!("handle_on_enter_snap begin");
     let config = state.config.read().on_enter.clone();
     match state
         .sessions
@@ -449,7 +454,29 @@ pub(crate) fn handle_on_enter_snap(
             Ok(capabilities::on_enter(&config, &session, &uri, &params))
         }
         Err(err) => {
-            tracing::error!("{}", err.to_string());
+            tracing::error!("on_enter error: {}", err.to_string());
+            Ok(None)
+        }
+    }
+}
+
+pub(crate) fn handle_semantic_tokens_full_snap(
+    state: ServerStateSnapshot,
+    params: SemanticTokensParams,
+) -> anyhow::Result<Option<SemanticTokensResult>> {
+    tracing::info!("handle_semantic_tokens_full_snap begin");
+    match state
+        .sessions
+        .uri_and_session_from_workspace(&params.text_document.uri)
+    {
+        Ok((uri, session)) => {
+            let _ = session.wait_for_parsing();
+            Ok(capabilities::semantic_tokens::semantic_tokens_full(
+                session, &uri,
+            ))
+        }
+        Err(err) => {
+            tracing::error!("semantic_tokens error: {}", err.to_string());
             Ok(None)
         }
     }
